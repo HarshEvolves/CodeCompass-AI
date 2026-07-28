@@ -113,3 +113,67 @@ async def list_repositories(
     result = await db.execute(query)
     repositories = result.scalars().all()
     return repositories
+
+
+@router.post(
+    "/{repository_id}/extract",
+    response_model=RepositoryResponse,
+    status_code=status.HTTP_200_OK
+)
+async def extract_repository(
+    repository_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Extracts the uploaded ZIP archive of a repository into a unique workspace directory.
+    Only allows extraction of repositories owned by the currently authenticated user.
+    """
+    # 1. Fetch repository by ID and verify ownership
+    query = select(Repository).where(
+        Repository.id == repository_id,
+        Repository.user_id == current_user.id
+    )
+    result = await db.execute(query)
+    repo = result.scalars().first()
+
+    if not repo:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Repository not found."
+        )
+
+    # 2. Define unique extraction destination directory
+    from app.core.config import settings
+    from app.services import extract_zip_securely, ExtractionError
+    
+    workspace_dir = os.path.join(settings.WORKSPACE_DIR, str(repo.id))
+
+    # 3. Perform extraction and update status
+    try:
+        extract_zip_securely(repo.storage_path, workspace_dir)
+        repo.upload_status = "EXTRACTED"
+        db.add(repo)
+        await db.commit()
+        await db.refresh(repo)
+    except ExtractionError as e:
+        repo.upload_status = "FAILED"
+        db.add(repo)
+        await db.commit()
+        await db.refresh(repo)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        repo.upload_status = "FAILED"
+        db.add(repo)
+        await db.commit()
+        await db.refresh(repo)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred during extraction: {str(e)}"
+        )
+
+    return repo
+

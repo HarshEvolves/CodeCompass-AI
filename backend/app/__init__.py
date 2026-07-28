@@ -1,0 +1,1 @@
+# CodeCompass backend application package

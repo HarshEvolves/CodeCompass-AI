@@ -1,0 +1,116 @@
+/*
+ * CodeCompass — Global Styles (Tailwind CSS v4)
+ *
+ * Tailwind v4 uses CSS-first configuration.
+ * We define our custom dark theme using the @theme directive
+ * instead of a tailwind.config.js file.
+ */
+
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap");
+
+@import "tailwindcss";
+
+/* ─── Custom Theme ─────────────────────────────────────────── */
+@theme {
+  /* Background colors */
+  --color-bg-primary: #0a0a0f;
+  --color-bg-secondary: #111119;
+  --color-bg-card: #16162a;
+  --color-bg-elevated: #1e1e3a;
+
+  /* Border colors */
+  --color-border-default: #2a2a4a;
+  --color-border-hover: #3a3a5a;
+
+  /* Text colors */
+  --color-text-primary: #f0f0ff;
+  --color-text-secondary: #a0a0c0;
+  --color-text-muted: #606080;
+
+  /* Accent colors */
+  --color-accent: #6366f1;
+  --color-accent-hover: #818cf8;
+  --color-accent-secondary: #8b5cf6;
+  --color-accent-glow: rgba(99, 102, 241, 0.3);
+
+  /* Status colors */
+  --color-success: #22c55e;
+  --color-error: #ef4444;
+
+  /* Typography */
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", monospace;
+}
+
+/* ─── Base Reset ───────────────────────────────────────────── */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  min-height: 100vh;
+  line-height: 1.6;
+}
+
+/* ─── Scrollbar ────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--color-bg-secondary); }
+::-webkit-scrollbar-thumb { background: var(--color-border-default); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-border-hover); }
+
+/* ─── Reusable Utility Classes ─────────────────────────────── */
+
+/* Glassmorphism card */
+.glass-card {
+  background: rgba(22, 22, 42, 0.6);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--color-border-default);
+  border-radius: 1rem;
+}
+
+/* Gradient text */
+.gradient-text {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6, #ec4899);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Animated background */
+.animated-gradient {
+  background: linear-gradient(-45deg, #0a0a0f, #1a1a2e, #16162a, #0a0a1f);
+  background-size: 400% 400%;
+  animation: gradient-shift 15s ease infinite;
+}
+
+@keyframes gradient-shift {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Float animation */
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-10px); }
+}
+.animate-float { animation: float 6s ease-in-out infinite; }
+
+/* Glow pulse */
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 5px var(--color-accent-glow); }
+  50%      { box-shadow: 0 0 20px var(--color-accent-glow), 0 0 40px rgba(99,102,241,0.15); }
+}
+.animate-pulse-glow { animation: pulse-glow 3s ease-in-out infinite; }

@@ -5,6 +5,7 @@ from app.services.parser import parse_repository_files, ParsingError
 from app.services.chunker import chunk_repository_files, ChunkingError
 from app.services.embedder import index_repository_chunks, EmbeddingError
 from app.services.searcher import search_repository_chunks, SearchError
+from app.services.rag import generate_rag_answer, RAGError
 
 __all__ = [
     "register_user",
@@ -18,7 +19,9 @@ __all__ = [
     "index_repository_chunks",
     "EmbeddingError",
     "search_repository_chunks",
-    "SearchError"
+    "SearchError",
+    "generate_rag_answer",
+    "RAGError"
 ]
 
 

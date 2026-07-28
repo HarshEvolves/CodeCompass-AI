@@ -14,6 +14,7 @@ from app.models.user import User
 from app.models.repository import Repository
 from app.schemas.repository import RepositoryResponse
 from app.schemas.search import SearchRequest, SearchResultResponse
+from app.schemas.chat import ChatRequest, ChatResponse
 
 router = APIRouter(prefix="/repositories", tags=["Repositories"])
 
@@ -445,4 +446,64 @@ async def search_repository(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"An unexpected error occurred during search: {str(e)}"
         )
+
+
+@router.post(
+    "/{repository_id}/chat",
+    response_model=ChatResponse,
+    status_code=status.HTTP_200_OK
+)
+async def chat_repository(
+    repository_id: uuid.UUID,
+    chat_req: ChatRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Generates an AI RAG answer for the user query using only retrieved repository chunks.
+    Only allows chatting with repositories owned by the currently authenticated user
+    that are in the 'INDEXED' state.
+    """
+    # 1. Fetch repository by ID and verify ownership
+    query = select(Repository).where(
+        Repository.id == repository_id,
+        Repository.user_id == current_user.id
+    )
+    result = await db.execute(query)
+    repo = result.scalars().first()
+
+    if not repo:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Repository not found."
+        )
+
+    # 2. Check repository state
+    if repo.upload_status != "INDEXED":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Repository cannot be queried via chat unless it is in the INDEXED state. Current state: {repo.upload_status}"
+        )
+
+    # 3. Trigger RAG generation and return results
+    from app.services import generate_rag_answer, RAGError
+
+    try:
+        results = await generate_rag_answer(
+            repository_id=repo.id,
+            query=chat_req.query,
+            top_k=chat_req.top_k
+        )
+        return results
+    except RAGError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred during chat: {str(e)}"
+        )
+
 

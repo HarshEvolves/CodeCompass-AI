@@ -28,6 +28,12 @@ class Settings(BaseSettings):
     CHROMA_PERSIST_DIR: str = "chroma_data"
     EMBEDDING_MODEL: str = "all-MiniLM-L6-v2"
 
+    # ── LLM Configuration (RAG) ──
+    GEMINI_API_KEY: str | None = None
+    OPENAI_API_KEY: str | None = None
+    GEMINI_MODEL: str = "gemini-1.5-flash"
+    OPENAI_MODEL: str = "gpt-4o-mini"
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

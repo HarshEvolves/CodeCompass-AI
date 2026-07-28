@@ -1,1 +1,1 @@
-# CodeCompass backend application package
+# app package

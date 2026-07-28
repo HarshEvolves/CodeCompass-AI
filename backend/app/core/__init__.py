@@ -1,1 +1,1 @@
-# Core module — config, security, and database utilities
+# core package

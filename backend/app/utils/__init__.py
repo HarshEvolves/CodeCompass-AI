@@ -1,1 +1,1 @@
-# Utils — shared helper/utility functions
+# utils package

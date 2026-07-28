@@ -1,1 +1,1 @@
-# API module — versioned API route handlers
+# api package

@@ -1,1 +1,1 @@
-# Routes — all API endpoint handlers live here
+# routes package

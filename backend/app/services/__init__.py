@@ -1,1 +1,1 @@
-# Services — business logic layer (Phase 2+)
+# services package

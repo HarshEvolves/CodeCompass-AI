@@ -18,3 +18,8 @@ alembic==1.15.2
 bcrypt==5.0.0
 python-jose[cryptography]==3.4.0
 python-multipart==0.0.20
+
+# Tree-sitter Code Parsing
+tree-sitter==0.21.3
+tree-sitter-languages==1.10.2
+

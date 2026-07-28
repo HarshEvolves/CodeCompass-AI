@@ -177,3 +177,74 @@ async def extract_repository(
 
     return repo
 
+
+@router.post(
+    "/{repository_id}/parse",
+    response_model=RepositoryResponse,
+    status_code=status.HTTP_200_OK
+)
+async def parse_repository(
+    repository_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Parses an extracted repository using Tree-sitter and stores the file metadata.
+    Only allows parsing of repositories owned by the currently authenticated user
+    that are in the 'EXTRACTED' state.
+    """
+    # 1. Fetch repository by ID and verify ownership
+    query = select(Repository).where(
+        Repository.id == repository_id,
+        Repository.user_id == current_user.id
+    )
+    result = await db.execute(query)
+    repo = result.scalars().first()
+
+    if not repo:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Repository not found."
+        )
+
+    # 2. Check repository state
+    if repo.upload_status != "EXTRACTED":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Repository cannot be parsed unless it is in the EXTRACTED state. Current state: {repo.upload_status}"
+        )
+
+    # 3. Define workspace directory path
+    from app.core.config import settings
+    from app.services import parse_repository_files, ParsingError
+
+    workspace_dir = os.path.join(settings.WORKSPACE_DIR, str(repo.id))
+
+    # 4. Trigger parsing and update status
+    try:
+        await parse_repository_files(db, repo.id, workspace_dir)
+        repo.upload_status = "PARSED"
+        db.add(repo)
+        await db.commit()
+        await db.refresh(repo)
+    except ParsingError as e:
+        repo.upload_status = "FAILED"
+        db.add(repo)
+        await db.commit()
+        await db.refresh(repo)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        repo.upload_status = "FAILED"
+        db.add(repo)
+        await db.commit()
+        await db.refresh(repo)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred during parsing: {str(e)}"
+        )
+
+    return repo
+

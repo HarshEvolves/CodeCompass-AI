@@ -13,6 +13,7 @@ from app.db import get_db
 from app.models.user import User
 from app.models.repository import Repository
 from app.schemas.repository import RepositoryResponse
+from app.schemas.search import SearchRequest, SearchResultResponse
 
 router = APIRouter(prefix="/repositories", tags=["Repositories"])
 
@@ -385,3 +386,63 @@ async def index_repository(
         )
 
     return repo
+
+
+@router.post(
+    "/{repository_id}/search",
+    response_model=List[SearchResultResponse],
+    status_code=status.HTTP_200_OK
+)
+async def search_repository(
+    repository_id: uuid.UUID,
+    search_req: SearchRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Performs a semantic search on the code chunks of a repository using the query string.
+    Only allows searching repositories owned by the currently authenticated user
+    that are in the 'INDEXED' state.
+    """
+    # 1. Fetch repository by ID and verify ownership
+    query = select(Repository).where(
+        Repository.id == repository_id,
+        Repository.user_id == current_user.id
+    )
+    result = await db.execute(query)
+    repo = result.scalars().first()
+
+    if not repo:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Repository not found."
+        )
+
+    # 2. Check repository state
+    if repo.upload_status != "INDEXED":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Repository cannot be searched unless it is in the INDEXED state. Current state: {repo.upload_status}"
+        )
+
+    # 3. Trigger search and return results
+    from app.services import search_repository_chunks, SearchError
+
+    try:
+        results = await search_repository_chunks(
+            repository_id=repo.id,
+            query=search_req.query,
+            top_k=search_req.top_k
+        )
+        return results
+    except SearchError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred during search: {str(e)}"
+        )
+

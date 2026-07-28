@@ -2,6 +2,7 @@
 from app.services.auth_service import register_user, authenticate_user
 from app.services.extractor import extract_zip_securely, ExtractionError
 from app.services.parser import parse_repository_files, ParsingError
+from app.services.chunker import chunk_repository_files, ChunkingError
 
 __all__ = [
     "register_user",
@@ -9,6 +10,8 @@ __all__ = [
     "extract_zip_securely",
     "ExtractionError",
     "parse_repository_files",
-    "ParsingError"
+    "ParsingError",
+    "chunk_repository_files",
+    "ChunkingError"
 ]
 

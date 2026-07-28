@@ -248,3 +248,75 @@ async def parse_repository(
 
     return repo
 
+
+@router.post(
+    "/{repository_id}/chunk",
+    response_model=RepositoryResponse,
+    status_code=status.HTTP_200_OK
+)
+async def chunk_repository(
+    repository_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Splits the parsed source code of a repository into semantic chunks and stores them.
+    Only allows chunking of repositories owned by the currently authenticated user
+    that are in the 'PARSED' state.
+    """
+    # 1. Fetch repository by ID and verify ownership
+    query = select(Repository).where(
+        Repository.id == repository_id,
+        Repository.user_id == current_user.id
+    )
+    result = await db.execute(query)
+    repo = result.scalars().first()
+
+    if not repo:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Repository not found."
+        )
+
+    # 2. Check repository state
+    if repo.upload_status != "PARSED":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Repository cannot be chunked unless it is in the PARSED state. Current state: {repo.upload_status}"
+        )
+
+    # 3. Define workspace directory path
+    from app.core.config import settings
+    from app.services import chunk_repository_files, ChunkingError
+
+    workspace_dir = os.path.join(settings.WORKSPACE_DIR, str(repo.id))
+
+    # 4. Trigger chunking and update status
+    try:
+        await chunk_repository_files(db, repo.id, workspace_dir)
+        repo.upload_status = "CHUNKED"
+        db.add(repo)
+        await db.commit()
+        await db.refresh(repo)
+    except ChunkingError as e:
+        repo.upload_status = "FAILED"
+        db.add(repo)
+        await db.commit()
+        await db.refresh(repo)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        repo.upload_status = "FAILED"
+        db.add(repo)
+        await db.commit()
+        await db.refresh(repo)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred during chunking: {str(e)}"
+        )
+
+    return repo
+
+

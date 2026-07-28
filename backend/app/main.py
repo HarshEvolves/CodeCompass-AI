@@ -4,6 +4,7 @@ CodeCompass Backend — FastAPI App Core Entry Point
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
+from app.api.v1.routes import health_router
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -20,14 +21,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Include routers
+app.include_router(health_router)
 
-@app.get("/api/v1/health")
-async def health_check():
+
+@app.get("/", tags=["Root"])
+async def root():
     """
-    Basic health check query route endpoint.
+    Root entrypoint listing documentation URLs.
     """
     return {
-        "status": "healthy",
         "app": settings.APP_NAME,
-        "version": "1.0.0"
+        "docs": "/docs",
+        "health": "/health"
     }
+

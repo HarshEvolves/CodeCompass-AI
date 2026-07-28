@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     # ── Extraction Workspace ──
     WORKSPACE_DIR: str = "workspace"
 
+    # ── Embedding & Vector Storage ──
+    CHROMA_PERSIST_DIR: str = "chroma_data"
+    EMBEDDING_MODEL: str = "all-MiniLM-L6-v2"
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

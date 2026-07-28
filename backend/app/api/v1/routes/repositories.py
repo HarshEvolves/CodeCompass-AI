@@ -320,3 +320,68 @@ async def chunk_repository(
     return repo
 
 
+@router.post(
+    "/{repository_id}/index",
+    response_model=RepositoryResponse,
+    status_code=status.HTTP_200_OK
+)
+async def index_repository(
+    repository_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Generates vector embeddings for all code chunks belonging to a repository
+    and stores them in ChromaDB. Only allows indexing of repositories owned
+    by the currently authenticated user that are in the 'CHUNKED' state.
+    """
+    # 1. Fetch repository by ID and verify ownership
+    query = select(Repository).where(
+        Repository.id == repository_id,
+        Repository.user_id == current_user.id
+    )
+    result = await db.execute(query)
+    repo = result.scalars().first()
+
+    if not repo:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Repository not found."
+        )
+
+    # 2. Check repository state
+    if repo.upload_status != "CHUNKED":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Repository cannot be indexed unless it is in the CHUNKED state. Current state: {repo.upload_status}"
+        )
+
+    # 3. Trigger embedding generation and update status
+    from app.services import index_repository_chunks, EmbeddingError
+
+    try:
+        total_indexed = await index_repository_chunks(db, repo.id)
+        repo.upload_status = "INDEXED"
+        db.add(repo)
+        await db.commit()
+        await db.refresh(repo)
+    except EmbeddingError as e:
+        repo.upload_status = "FAILED"
+        db.add(repo)
+        await db.commit()
+        await db.refresh(repo)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        repo.upload_status = "FAILED"
+        db.add(repo)
+        await db.commit()
+        await db.refresh(repo)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred during indexing: {str(e)}"
+        )
+
+    return repo

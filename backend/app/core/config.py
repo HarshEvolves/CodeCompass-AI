@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     HOST: str = "0.0.0.0"
     PORT: int = 8000
     CORS_ORIGINS: List[str] = ["http://localhost:5173", "http://localhost:3000"]
+    DATABASE_URL: str
 
     model_config = SettingsConfigDict(
         env_file=".env",

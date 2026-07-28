@@ -34,3 +34,20 @@ class UserResponse(UserBase):
     model_config = {
         "from_attributes": True
     }
+
+
+class UserLogin(BaseModel):
+    """
+    Validation schema for verifying login inputs.
+    """
+    email: EmailStr
+    password: str
+
+
+class Token(BaseModel):
+    """
+    Response schema returning JWT authentication token credentials.
+    """
+    access_token: str
+    token_type: str = "bearer"
+

@@ -1,0 +1,14 @@
+venv/
+.env
+.git/
+.gitignore
+__pycache__/
+*.pyc
+*.pyo
+*.db
+uploads/*
+workspace/*
+chroma_data/*
+.pytest_cache/
+.coverage
+htmlcov/

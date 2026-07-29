@@ -1,0 +1,67 @@
+version: "3.8"
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: codecompass_db
+    restart: always
+    environment:
+      POSTGRES_USER: codecompass
+      POSTGRES_PASSWORD: codecompass_secret
+      POSTGRES_DB: codecompass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U codecompass -d codecompass"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: codecompass_backend
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://codecompass:codecompass_secret@db:5432/codecompass
+      JWT_SECRET_KEY: dev-secret-key-change-in-production
+      JWT_ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 30
+      # Load other secrets/variables from the host environment/shell or .env
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+    volumes:
+      - uploads_data:/app/uploads
+      - workspace_data:/app/workspace
+      - chroma_data:/app/chroma_data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: codecompass_frontend
+    restart: always
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "5173:80"
+
+volumes:
+  postgres_data:
+  uploads_data:
+  workspace_data:
+  chroma_data:

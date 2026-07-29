@@ -72,3 +72,41 @@ Code Compass/
    npm run dev
    ```
    * Access client application at: http://localhost:5173
+
+---
+
+## Docker Setup Instructions
+
+You can spin up the entire production stack (FastAPI Backend, Nginx-served SPA Frontend, and PostgreSQL Database) inside container networks with persistent storage volumes using a single Docker Compose command.
+
+### 1. Requirements
+Ensure you have **Docker** and **Docker Compose** installed on your system.
+
+### 2. Configure Environment Secrets
+Make sure `GEMINI_API_KEY` or `OPENAI_API_KEY` is exported in your host terminal shell:
+```bash
+export GEMINI_API_KEY="AIzaSy...your_key"
+```
+Or define them inside the local `backend/.env` file.
+
+### 3. Spin up the Containers
+From the root project directory, run:
+```bash
+docker compose up --build
+```
+
+- **Frontend Application:** Available at `http://localhost:5173`
+- **Backend API Server:** Available at `http://localhost:8000`
+- **Interactive OpenAPI Documentation:** Available at `http://localhost:8000/docs`
+- **Health Check Endpoint:** Available at `http://localhost:8000/health`
+
+### 4. Stopping the containers
+To stop the stack and keep volume state intact:
+```bash
+docker compose down
+```
+
+To stop and wipe database/workspace volumes:
+```bash
+docker compose down -v
+```

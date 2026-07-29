@@ -67,6 +67,7 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
             <CodeSnippetPanel
               files={message.retrieved_files}
               snippets={message.retrieved_code_snippets}
+              citations={message.citations}
             />
           )}
       </div>

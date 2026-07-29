@@ -507,3 +507,60 @@ async def chat_repository(
         )
 
 
+@router.get(
+    "/{repository_id}/file",
+    status_code=status.HTTP_200_OK
+)
+async def get_repository_file(
+    repository_id: uuid.UUID,
+    file_path: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Retrieves the complete content of a file within the workspace.
+    Only allows access to repositories owned by the currently authenticated user.
+    """
+    # 1. Fetch repository by ID and verify ownership
+    query = select(Repository).where(
+        Repository.id == repository_id,
+        Repository.user_id == current_user.id
+    )
+    result = await db.execute(query)
+    repo = result.scalars().first()
+
+    if not repo:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Repository not found."
+        )
+
+    # 2. Resolve safe path
+    workspace_dir = os.path.abspath(os.path.join("workspace", str(repo.id)))
+    target_path = os.path.abspath(os.path.join(workspace_dir, file_path))
+
+    # Path traversal validation (Zip Slip style protection)
+    if not target_path.startswith(workspace_dir + os.sep) and target_path != workspace_dir:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Access denied: Directory traversal path detected."
+        )
+
+    if not os.path.exists(target_path) or not os.path.isfile(target_path):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"File not found in repository: {file_path}"
+        )
+
+    try:
+        with open(target_path, "r", encoding="utf-8", errors="ignore") as f:
+            content = f.read()
+        return {"content": content, "relative_path": file_path}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Could not read file: {str(e)}"
+        )
+
+
+

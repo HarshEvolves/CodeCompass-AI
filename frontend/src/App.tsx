@@ -4,6 +4,7 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
 import Chat from "./pages/Chat";
+import ViewFullFile from "./pages/ViewFullFile";
 
 // Initialize TanStack React Query Client
 const queryClient = new QueryClient({
@@ -76,6 +77,14 @@ export default function App() {
             element={
               <PrivateRoute>
                 <Chat />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/repository/:repositoryId/file"
+            element={
+              <PrivateRoute>
+                <ViewFullFile />
               </PrivateRoute>
             }
           />

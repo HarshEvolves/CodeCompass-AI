@@ -19,7 +19,7 @@ from app.schemas.chat import ChatRequest, ChatResponse
 router = APIRouter(prefix="/repositories", tags=["Repositories"])
 
 # Configuration settings
-UPLOAD_DIR = "uploads"
+UPLOAD_DIR = settings.UPLOAD_DIR
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB limit
 
 

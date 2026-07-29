@@ -49,31 +49,41 @@ async def parse_repository_files(db: AsyncSession, repository_id: str, workspace
     supported source files using Tree-sitter, and stores file metadata.
     """
     workspace_path = Path(workspace_dir).resolve()
-    
-    # 1. Verify workspace directory exists
-    if not workspace_path.exists() or not workspace_path.is_dir():
+    workspace_exists = workspace_path.exists() and workspace_path.is_dir()
+
+    # 1. Log pre-scan details
+    logger.info(
+        f"Parser Pre-Scan Status: "
+        f"workspace_path={workspace_path}, "
+        f"repository_id={repository_id}, "
+        f"workspace_exists={workspace_exists}"
+    )
+
+    if not workspace_exists:
         logger.error(f"Workspace directory {workspace_dir} not found for parsing.")
         raise ParsingError("Repository workspace does not exist. Extract repository first.")
 
-    # 2. Check if the workspace directory contains any files
-    all_files = []
+    # 2. Count files discovered in the workspace directory
+    total_files_discovered = 0
     for root, dirs, files in os.walk(workspace_path):
-        for file in files:
-            all_files.append(file)
-            
-    if not all_files:
-        logger.error(f"Workspace directory {workspace_dir} is empty.")
+        total_files_discovered += len(files)
+
+    logger.info(
+        f"Parser Pre-Scan Files Count: "
+        f"workspace_path={workspace_path}, "
+        f"repository_id={repository_id}, "
+        f"total_files_discovered={total_files_discovered}"
+    )
+
+    if total_files_discovered == 0:
+        logger.error(f"Workspace directory {workspace_dir} contains zero files.")
         raise ParsingError("Repository extraction produced no files.")
 
     code_files_to_create = []
-    total_files_discovered = 0
     supported_files = 0
     skipped_files = 0
-
-    logger.info(
-        f"Starting parser scanner for repository: {repository_id}. "
-        f"Workspace target: {workspace_dir}."
-    )
+    failed_files = 0
+    failed_languages = set()
 
     try:
         # Walk recursively through the workspace
@@ -82,12 +92,14 @@ async def parse_repository_files(db: AsyncSession, repository_id: str, workspace
             dirs[:] = [d for d in dirs if d not in IGNORED_DIRS]
 
             for file in files:
-                total_files_discovered += 1
                 file_path = Path(root) / file
                 ext = file_path.suffix.lower()
 
                 if ext in EXTENSION_TO_LANGUAGE:
                     lang = EXTENSION_TO_LANGUAGE[ext]
+                    
+                    # Log language targeting
+                    logger.info(f"Targeting file parsing: file_path={file_path}, language={lang}")
 
                     try:
                         # Get relative path from workspace root
@@ -101,9 +113,25 @@ async def parse_repository_files(db: AsyncSession, repository_id: str, workspace
                         file_size = file_path.stat().st_size
                         total_lines = len(content.splitlines())
 
-                        # Parse using tree-sitter to verify the file is parse-able
-                        parser = get_parser(lang)
-                        parser.parse(bytes(content, "utf8"))
+                        # Wrap get_parser(lang) separately and log traceback if it fails
+                        try:
+                            logger.info(f"Retrieving tree-sitter parser for language: {lang}")
+                            parser = get_parser(lang)
+                        except Exception as gpe:
+                            logger.exception(f"Failed to retrieve tree-sitter get_parser for language {lang}")
+                            failed_files += 1
+                            failed_languages.add(lang)
+                            continue
+
+                        # Wrap parser.parse(...) separately and log traceback if it fails
+                        try:
+                            logger.info(f"Running parser.parse for language {lang} on file: {relative_path}")
+                            parser.parse(bytes(content, "utf8"))
+                        except Exception as pe:
+                            logger.exception(f"Parser parse call failed for language {lang} on file: {file_path}")
+                            failed_files += 1
+                            failed_languages.add(lang)
+                            continue
 
                         # Build the DB model instance
                         code_file = CodeFile(
@@ -118,30 +146,41 @@ async def parse_repository_files(db: AsyncSession, repository_id: str, workspace
                         logger.info(f"Parsed file successfully: {relative_path} ({lang})")
 
                     except Exception as fe:
-                        logger.exception(f"Failed to parse individual file {file_path}")
-                        skipped_files += 1
+                        logger.exception(f"General file processing failure for path: {file_path}")
+                        failed_files += 1
                         # Continue to parse other files even if one fails
                 else:
                     skipped_files += 1
 
+        # 3. Log post-scan stats
         logger.info(
             f"Scanner completed for repository: {repository_id}. "
-            f"Total files discovered: {total_files_discovered}. "
             f"Supported files parsed: {supported_files}. "
-            f"Skipped/unsupported files: {skipped_files}."
+            f"Skipped files: {skipped_files}. "
+            f"Failed files: {failed_files}."
         )
 
-        if not code_files_to_create:
-            logger.error(f"No supported source code files found in workspace: {workspace_dir}")
-            raise ParsingError("No supported source code files found in the repository.")
+        # 4. If every file fails, raise clear message indicating missing parser
+        if supported_files == 0:
+            if failed_files > 0:
+                missing_langs = ", ".join(sorted(list(failed_languages)))
+                logger.error(f"All supported files failed to parse. Missing language parsers: {missing_langs}")
+                raise ParsingError(f"All supported files failed to parse. Missing or unavailable language parsers: {missing_langs}")
+            else:
+                logger.error(f"No supported source code files found in workspace: {workspace_dir}")
+                raise ParsingError("No supported source code files found in the repository.")
 
-        # Batch insert all parsed code files
-        db.add_all(code_files_to_create)
-        await db.flush()
-        logger.info(f"Inserted {len(code_files_to_create)} code file records for repo {repository_id}")
+        # 5. Batch insert and verify database write success
+        try:
+            db.add_all(code_files_to_create)
+            await db.flush()
+            logger.info(f"Successfully inserted {len(code_files_to_create)} CodeFile records for repo {repository_id}")
+        except Exception as dbe:
+            logger.exception(f"Database insertion failed for CodeFile records of repo {repository_id}")
+            raise ParsingError(f"Database write failure: {str(dbe)}")
 
     except Exception as e:
         if not isinstance(e, ParsingError):
-            logger.error(f"Unexpected error during repository parsing {repository_id}: {str(e)}")
+            logger.exception(f"Unexpected error during repository parsing {repository_id}")
             raise ParsingError(f"Repository parsing failed: {str(e)}")
         raise e

@@ -1,8 +1,16 @@
 import axios from "axios";
 
+let configuredBaseURL = import.meta.env.VITE_API_BASE_URL || "";
+if (configuredBaseURL.endsWith("/")) {
+  configuredBaseURL = configuredBaseURL.slice(0, -1);
+}
+// Automatically guarantee `/api/v1` is appended to the base URL in production if not present
+if (!configuredBaseURL.endsWith("/api/v1")) {
+  configuredBaseURL = configuredBaseURL ? `${configuredBaseURL}/api/v1` : "/api/v1";
+}
+
 const api = axios.create({
-  // Read base URL from env if deployed on a different origin, otherwise fallback to standard SPA prefix
-  baseURL: import.meta.env.VITE_API_BASE_URL || "/api/v1",
+  baseURL: configuredBaseURL,
   headers: {
     "Content-Type": "application/json",
   },

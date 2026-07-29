@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     # ── LLM Configuration (RAG) ──
     GEMINI_API_KEY: str | None = None
     OPENAI_API_KEY: str | None = None
-    GEMINI_MODEL: str = "gemini-1.5-flash"
+    GEMINI_MODEL: str = "gemini-3.5-flash"
     OPENAI_MODEL: str = "gpt-4o-mini"
 
     model_config = SettingsConfigDict(

@@ -196,6 +196,8 @@ async def parse_repository(
     Only allows parsing of repositories owned by the currently authenticated user
     that are in the 'EXTRACTED' state.
     """
+    logger.info(f"CORS Check / Request received: parse_repository repository_id={repository_id}, user={current_user.email}")
+
     # 1. Fetch repository by ID and verify ownership
     query = select(Repository).where(
         Repository.id == repository_id,
@@ -205,13 +207,17 @@ async def parse_repository(
     repo = result.scalars().first()
 
     if not repo:
+        logger.error(f"Repository lookup failed: repository_id={repository_id} not found or access denied for user={current_user.email}")
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Repository not found."
         )
 
+    logger.info(f"Repository lookup succeeded: repository_id={repository_id}, current_status={repo.upload_status}")
+
     # 2. Check repository state
     if repo.upload_status != "EXTRACTED":
+        logger.error(f"Invalid state for parsing: repository_id={repository_id}, status={repo.upload_status}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Repository cannot be parsed unless it is in the EXTRACTED state. Current state: {repo.upload_status}"
@@ -222,31 +228,50 @@ async def parse_repository(
     from app.services import parse_repository_files, ParsingError
 
     workspace_dir = os.path.join(settings.WORKSPACE_DIR, str(repo.id))
+    logger.info(f"Determined workspace path for parsing: workspace_dir={workspace_dir}, repository_id={repository_id}")
 
     # 4. Trigger parsing and update status
     try:
+        logger.info(f"Invoking parse_repository_files: repository_id={repo.id}, workspace_dir={workspace_dir}")
         await parse_repository_files(db, repo.id, workspace_dir)
+        
+        logger.info(f"parse_repository_files execution finished successfully for repository_id={repo.id}. Setting state to PARSED.")
         repo.upload_status = "PARSED"
         db.add(repo)
         await db.commit()
         await db.refresh(repo)
+        logger.info(f"Database update complete: repository_id={repo.id} status is now PARSED.")
     except ParsingError as e:
-        repo.upload_status = "FAILED"
-        db.add(repo)
-        await db.commit()
-        await db.refresh(repo)
+        logger.exception(f"Parsing error occurred during execution on repository_id={repo.id}")
+        # Roll back the failed transaction to allow status update
+        await db.rollback()
+        try:
+            repo.upload_status = "FAILED"
+            db.add(repo)
+            await db.commit()
+            await db.refresh(repo)
+            logger.info(f"Successfully marked repository_id={repo.id} status as FAILED.")
+        except Exception as rb_err:
+            logger.exception(f"Failed to set status to FAILED after ParsingError rollback on repository_id={repo.id}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
         )
     except Exception as e:
-        repo.upload_status = "FAILED"
-        db.add(repo)
-        await db.commit()
-        await db.refresh(repo)
+        logger.exception(f"Unexpected exception caught in parse_repository route for repository_id={repo.id}")
+        # Roll back the failed transaction to allow status update
+        await db.rollback()
+        try:
+            repo.upload_status = "FAILED"
+            db.add(repo)
+            await db.commit()
+            await db.refresh(repo)
+            logger.info(f"Successfully marked repository_id={repo.id} status as FAILED.")
+        except Exception as rb_err:
+            logger.exception(f"Failed to set status to FAILED after unexpected Exception rollback on repository_id={repo.id}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An unexpected error occurred during parsing: {str(e)}"
+            detail=str(e)
         )
 
     return repo

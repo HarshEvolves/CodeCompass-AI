@@ -65,8 +65,12 @@ async def parse_repository_files(db: AsyncSession, repository_id: str, workspace
 
     # 2. Count files discovered in the workspace directory
     total_files_discovered = 0
-    for root, dirs, files in os.walk(workspace_path):
-        total_files_discovered += len(files)
+    try:
+        for root, dirs, files in os.walk(workspace_path):
+            total_files_discovered += len(files)
+    except Exception as count_err:
+        logger.exception("Error counting files in workspace directory")
+        raise ParsingError(f"Failed to scan workspace directory: {str(count_err)}")
 
     logger.info(
         f"Parser Pre-Scan Files Count: "
@@ -98,69 +102,82 @@ async def parse_repository_files(db: AsyncSession, repository_id: str, workspace
                 if ext in EXTENSION_TO_LANGUAGE:
                     lang = EXTENSION_TO_LANGUAGE[ext]
                     
-                    # Log language targeting
-                    logger.info(f"Targeting file parsing: file_path={file_path}, language={lang}")
+                    # Log language detected
+                    logger.info(f"Language detected for file: {file_path} is language={lang}")
 
+                    # Get relative path
                     try:
-                        # Get relative path from workspace root
                         relative_path = str(file_path.relative_to(workspace_path))
+                    except Exception as path_err:
+                        logger.exception(f"Failed to calculate relative path for {file_path}")
+                        failed_files += 1
+                        continue
 
-                        # Read content safely, ignoring decode errors
+                    # Wrap file reading individually with try/except
+                    content = ""
+                    try:
+                        logger.info(f"Before reading file: {file_path}")
                         with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                             content = f.read()
-
-                        # File stats
-                        file_size = file_path.stat().st_size
-                        total_lines = len(content.splitlines())
-
-                        # Wrap get_parser(lang) separately and log traceback if it fails
-                        try:
-                            logger.info(f"Retrieving tree-sitter parser for language: {lang}")
-                            parser = get_parser(lang)
-                        except Exception as gpe:
-                            logger.exception(f"Failed to retrieve tree-sitter get_parser for language {lang}")
-                            failed_files += 1
-                            failed_languages.add(lang)
-                            continue
-
-                        # Wrap parser.parse(...) separately and log traceback if it fails
-                        try:
-                            logger.info(f"Running parser.parse for language {lang} on file: {relative_path}")
-                            parser.parse(bytes(content, "utf8"))
-                        except Exception as pe:
-                            logger.exception(f"Parser parse call failed for language {lang} on file: {file_path}")
-                            failed_files += 1
-                            failed_languages.add(lang)
-                            continue
-
-                        # Build the DB model instance
-                        code_file = CodeFile(
-                            repository_id=repository_id,
-                            relative_path=relative_path,
-                            language=lang,
-                            file_size=file_size,
-                            total_lines=total_lines
-                        )
-                        code_files_to_create.append(code_file)
-                        supported_files += 1
-                        logger.info(f"Parsed file successfully: {relative_path} ({lang})")
-
-                    except Exception as fe:
-                        logger.exception(f"General file processing failure for path: {file_path}")
+                        logger.info(f"After reading file successfully: {file_path}")
+                    except Exception as re:
+                        logger.exception(f"Failed to read file {file_path}")
                         failed_files += 1
-                        # Continue to parse other files even if one fails
+                        continue
+
+                    file_size = file_path.stat().st_size
+                    total_lines = len(content.splitlines())
+
+                    # Wrap get_parser(lang) separately and log traceback if it fails
+                    parser = None
+                    try:
+                        logger.info(f"Before get_parser for language={lang} on file={relative_path}")
+                        parser = get_parser(lang)
+                        logger.info(f"After get_parser succeeded for language={lang}")
+                    except Exception as gpe:
+                        logger.exception(f"Failed to retrieve tree-sitter get_parser for language {lang}")
+                        failed_files += 1
+                        failed_languages.add(lang)
+                        continue
+
+                    # Wrap parser.parse(...) separately and log traceback if it fails
+                    try:
+                        logger.info(f"Before parser.parse for language={lang} on file={relative_path}")
+                        parser.parse(bytes(content, "utf8"))
+                        logger.info(f"After parser.parse succeeded for language={lang}")
+                    except Exception as pe:
+                        logger.exception(f"Parser parse call failed for language {lang} on file: {file_path}")
+                        failed_files += 1
+                        failed_languages.add(lang)
+                        continue
+
+                    # Build the DB model instance
+                    code_file = CodeFile(
+                        repository_id=repository_id,
+                        relative_path=relative_path,
+                        language=lang,
+                        file_size=file_size,
+                        total_lines=total_lines
+                    )
+                    code_files_to_create.append(code_file)
+                    supported_files += 1
+                    logger.info(f"Parsed file successfully: {relative_path} ({lang})")
                 else:
                     skipped_files += 1
 
-        # 3. Log post-scan stats
+        # Log these values: workspace_dir, repository_id, total_files_discovered, supported_files, skipped_files, code_files_to_create count
         logger.info(
-            f"Scanner completed for repository: {repository_id}. "
-            f"Supported files parsed: {supported_files}. "
-            f"Skipped files: {skipped_files}. "
-            f"Failed files: {failed_files}."
+            f"Parser Post-Scan Summary: "
+            f"workspace_dir={workspace_dir}, "
+            f"repository_id={repository_id}, "
+            f"total_files_discovered={total_files_discovered}, "
+            f"supported_files={supported_files}, "
+            f"skipped_files={skipped_files}, "
+            f"failed_files={failed_files}, "
+            f"code_files_to_create_count={len(code_files_to_create)}"
         )
 
-        # 4. If every file fails, raise clear message indicating missing parser
+        # If every file fails, raise clear message indicating missing parser
         if supported_files == 0:
             if failed_files > 0:
                 missing_langs = ", ".join(sorted(list(failed_languages)))
@@ -170,13 +187,23 @@ async def parse_repository_files(db: AsyncSession, repository_id: str, workspace
                 logger.error(f"No supported source code files found in workspace: {workspace_dir}")
                 raise ParsingError("No supported source code files found in the repository.")
 
-        # 5. Batch insert and verify database write success
+        # Batch insert and verify database write success
+        # Wrap operations individually with try/except
         try:
+            logger.info("Before database insert: adding code files to session...")
             db.add_all(code_files_to_create)
+            logger.info("After database insert: code files added to session.")
+        except Exception as add_err:
+            logger.exception("Failed to add parsed code files to SQLAlchemy session")
+            raise ParsingError(f"Database add failure: {str(add_err)}")
+
+        try:
+            logger.info("Before db.flush(): flushing changes to database...")
             await db.flush()
+            logger.info("After db.flush(): flush succeeded.")
             logger.info(f"Successfully inserted {len(code_files_to_create)} CodeFile records for repo {repository_id}")
         except Exception as dbe:
-            logger.exception(f"Database insertion failed for CodeFile records of repo {repository_id}")
+            logger.exception(f"Database flush failed for CodeFile records of repo {repository_id}")
             raise ParsingError(f"Database write failure: {str(dbe)}")
 
     except Exception as e:

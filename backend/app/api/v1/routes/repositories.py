@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
+from app.core.config import settings
 from app.api.v1.deps import get_current_user
 from app.db import get_db
 from app.models.user import User

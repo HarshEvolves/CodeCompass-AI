@@ -36,9 +36,9 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
         </span>
 
         {/* Text body */}
-        <p className="text-sm leading-relaxed whitespace-pre-wrap select-text">
-          {message.text}
-        </p>
+        <div className="space-y-1.5 select-text">
+          {renderMarkdown(message.text)}
+        </div>
 
         {/* Citations section */}
         {!isUser && message.citations && message.citations.length > 0 && (
@@ -74,3 +74,102 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
     </div>
   );
 }
+
+function renderInlineInside(text: string): React.ReactNode {
+  const parts = text.split(/(`.*?`)/g);
+  return (
+    <>
+      {parts.map((part, index) => {
+        if (part.startsWith("`") && part.endsWith("`")) {
+          return (
+            <code
+              key={index}
+              className="bg-bg-primary border border-border-default/45 px-1.5 py-0.5 rounded text-accent font-mono text-xs"
+            >
+              {part.slice(1, -1)}
+            </code>
+          );
+        }
+        return part;
+      })}
+    </>
+  );
+}
+
+function renderInline(text: string): React.ReactNode {
+  const parts = text.split(/(\*\*.*?\*\*|`.*?`)/g);
+  return (
+    <>
+      {parts.map((part, index) => {
+        if (part.startsWith("**") && part.endsWith("**")) {
+          return (
+            <strong key={index} className="font-bold text-text-primary">
+              {renderInlineInside(part.slice(2, -2))}
+            </strong>
+          );
+        }
+        if (part.startsWith("`") && part.endsWith("`")) {
+          return (
+            <code
+              key={index}
+              className="bg-bg-primary border border-border-default/45 px-1.5 py-0.5 rounded text-accent font-mono text-xs"
+            >
+              {part.slice(1, -1)}
+            </code>
+          );
+        }
+        return part;
+      })}
+    </>
+  );
+}
+
+function renderMarkdown(text: string) {
+  const lines = text.split("\n");
+  return lines.map((line, idx) => {
+    // 1. Headers
+    if (line.startsWith("### ")) {
+      return (
+        <h3 key={idx} className="text-sm font-bold mt-4 mb-2 text-text-primary">
+          {renderInline(line.slice(4))}
+        </h3>
+      );
+    }
+    if (line.startsWith("## ")) {
+      return (
+        <h2 key={idx} className="text-base font-bold mt-4 mb-2 text-text-primary">
+          {renderInline(line.slice(3))}
+        </h2>
+      );
+    }
+    if (line.startsWith("# ")) {
+      return (
+        <h1 key={idx} className="text-lg font-bold mt-5 mb-2.5 text-text-primary">
+          {renderInline(line.slice(2))}
+        </h1>
+      );
+    }
+
+    // 2. Lists
+    if (line.startsWith("* ") || line.startsWith("- ")) {
+      return (
+        <li key={idx} className="ml-4 list-disc text-sm text-text-primary leading-relaxed mt-1">
+          {renderInline(line.slice(2))}
+        </li>
+      );
+    }
+
+    // 3. Empty Line
+    if (line.trim() === "") {
+      return <div key={idx} className="h-2" />;
+    }
+
+    // 4. Normal text
+    return (
+      <p key={idx} className="text-sm text-text-primary leading-relaxed">
+        {renderInline(line)}
+      </p>
+    );
+  });
+}
+

@@ -1,8 +1,8 @@
 import axios from "axios";
 
 const api = axios.create({
-  // Vite server proxy routes requests starting with "/api" to http://localhost:8000
-  baseURL: "/api/v1",
+  // Read base URL from env if deployed on a different origin, otherwise fallback to standard SPA prefix
+  baseURL: import.meta.env.VITE_API_BASE_URL || "/api/v1",
   headers: {
     "Content-Type": "application/json",
   },

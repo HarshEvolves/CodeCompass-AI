@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import StatusBadge from "./StatusBadge";
 import api from "@/lib/axios";
 
@@ -16,6 +17,7 @@ interface RepositoryCardProps {
 }
 
 export default function RepositoryCard({ repo, onActionSuccess }: RepositoryCardProps) {
+  const navigate = useNavigate();
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -134,22 +136,29 @@ export default function RepositoryCard({ repo, onActionSuccess }: RepositoryCard
             Chunk
           </button>
 
-          <button
-            onClick={() => handleAction("index")}
-            disabled={!isChunked || !!loadingAction}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-all ${
-              isChunked
-                ? "bg-accent text-white hover:bg-accent-hover cursor-pointer"
-                : isIndexed
-                ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 cursor-not-allowed"
-                : "bg-bg-primary text-text-muted opacity-40 cursor-not-allowed"
-            }`}
-          >
-            {loadingAction === "index" && (
-              <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            )}
-            {isIndexed ? "Indexed" : "Index"}
-          </button>
+          {isIndexed ? (
+            <button
+              onClick={() => navigate(`/repository/${repo.id}/chat`)}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500 hover:bg-emerald-600 text-white cursor-pointer flex items-center justify-center gap-1 transition-all"
+            >
+              Chat 💬
+            </button>
+          ) : (
+            <button
+              onClick={() => handleAction("index")}
+              disabled={!isChunked || !!loadingAction}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-all ${
+                isChunked
+                  ? "bg-accent text-white hover:bg-accent-hover cursor-pointer"
+                  : "bg-bg-primary text-text-muted opacity-40 cursor-not-allowed"
+              }`}
+            >
+              {loadingAction === "index" && (
+                <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              )}
+              Index
+            </button>
+          )}
         </div>
 
         {error && (

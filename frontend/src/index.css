@@ -3,25 +3,26 @@
 @import "tailwindcss";
 
 @theme {
-  --color-bg-primary: #0a0a0f;
-  --color-bg-secondary: #111119;
-  --color-bg-card: #16162a;
-  --color-bg-elevated: #1e1e3a;
+  --color-bg-primary: #09090B;
+  --color-bg-secondary: #0F0F13;
+  --color-bg-card: #18181B;
+  --color-bg-hover: #27272A;
 
-  --color-border-default: #2a2a4a;
-  --color-border-hover: #3a3a5a;
+  --color-border-default: #27272A;
+  --color-border-hover: #3F3F46;
 
-  --color-text-primary: #f0f0ff;
-  --color-text-secondary: #a0a0c0;
-  --color-text-muted: #606080;
+  --color-text-primary: #F8FAFC;
+  --color-text-secondary: #94A3B8;
+  --color-text-muted: #71717A;
 
-  --color-accent: #6366f1;
-  --color-accent-hover: #818cf8;
-  --color-accent-secondary: #8b5cf6;
-  --color-accent-glow: rgba(99, 102, 241, 0.3);
+  --color-accent: #6366F1;
+  --color-accent-hover: #4F46E5;
+  --color-accent-secondary: #818CF8;
+  --color-accent-glow: rgba(99, 102, 241, 0.15);
 
-  --color-success: #22c55e;
-  --color-error: #ef4444;
+  --color-success: #22C55E;
+  --color-warning: #F59E0B;
+  --color-error: #EF4444;
 
   --font-sans: "Inter", system-ui, -apple-system, sans-serif;
   --font-mono: "JetBrains Mono", "Fira Code", monospace;
@@ -31,6 +32,8 @@
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
@@ -38,45 +41,67 @@ body {
   background: var(--color-bg-primary);
   color: var(--color-text-primary);
   min-height: 100vh;
-  line-height: 1.6;
+  line-height: 1.625; /* Increased line-height for readability */
   overflow-x: hidden;
 }
 
-.glass-card {
-  background: rgba(22, 22, 42, 0.6);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+/* Premium SaaS Card definition */
+.saas-card {
+  background: var(--color-bg-card);
   border: 1px solid var(--color-border-default);
-  border-radius: 1rem;
+  border-radius: 16px; /* 16px radius */
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.saas-card:hover {
+  border-color: var(--color-border-hover);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.6), 0 10px 10px -5px rgba(99, 102, 241, 0.05);
+}
+
+/* Glassmorphism effects (subtle only) */
+.glass-effect {
+  background: rgba(24, 24, 27, 0.8);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--color-border-default);
 }
 
 .gradient-text {
-  background: linear-gradient(135deg, #6366f1, #8b5cf6, #ec4899);
+  background: linear-gradient(135deg, #6366F1, #818CF8, #C084FC);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
-.animated-gradient {
-  background: linear-gradient(-45deg, #0a0a0f, #1a1a2e, #16162a, #0a0a1f);
-  background-size: 400% 400%;
-  animation: gradient-shift 15s ease infinite;
+/* Clean Form Input Custom Styling */
+.saas-input {
+  background: rgba(9, 9, 11, 0.5);
+  border: 1px solid var(--color-border-default);
+  border-radius: 12px;
+  color: var(--color-text-primary);
+  transition: all 0.2s ease;
 }
 
-@keyframes gradient-shift {
-  0%   { background-position: 0% 50%; }
-  50%  { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
+.saas-input:focus {
+  outline: none;
+  background: rgba(9, 9, 11, 0.8);
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-glow);
 }
 
-@keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50%      { transform: translateY(-10px); }
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
 }
-.animate-float { animation: float 6s ease-in-out infinite; }
-
-@keyframes pulse-glow {
-  0%, 100% { box-shadow: 0 0 5px var(--color-accent-glow); }
-  50%      { box-shadow: 0 0 20px var(--color-accent-glow), 0 0 40px rgba(99,102,241,0.15); }
+::-webkit-scrollbar-track {
+  background: transparent;
 }
-.animate-pulse-glow { animation: pulse-glow 3s ease-in-out infinite; }
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}

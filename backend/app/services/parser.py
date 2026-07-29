@@ -5,7 +5,7 @@ import os
 import logging
 from pathlib import Path
 from sqlalchemy.ext.asyncio import AsyncSession
-from tree_sitter_languages import get_parser
+from tree_sitter_language_pack import get_parser
 
 from app.models.code_file import CodeFile
 

@@ -20,8 +20,8 @@ python-jose[cryptography]==3.4.0
 python-multipart==0.0.20
 
 # Tree-sitter Code Parsing
-tree-sitter==0.21.3
-tree-sitter-languages==1.10.2
+tree-sitter>=0.23.0
+tree-sitter-language-pack>=1.13.5
 
 # Embedding Generation & Vector Storage
 sentence-transformers==5.6.1

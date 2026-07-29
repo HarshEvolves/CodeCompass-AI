@@ -49,11 +49,31 @@ async def parse_repository_files(db: AsyncSession, repository_id: str, workspace
     supported source files using Tree-sitter, and stores file metadata.
     """
     workspace_path = Path(workspace_dir).resolve()
-    if not workspace_path.exists():
+    
+    # 1. Verify workspace directory exists
+    if not workspace_path.exists() or not workspace_path.is_dir():
         logger.error(f"Workspace directory {workspace_dir} not found for parsing.")
-        raise ParsingError(f"Workspace directory does not exist: {workspace_dir}")
+        raise ParsingError("Repository workspace does not exist. Extract repository first.")
+
+    # 2. Check if the workspace directory contains any files
+    all_files = []
+    for root, dirs, files in os.walk(workspace_path):
+        for file in files:
+            all_files.append(file)
+            
+    if not all_files:
+        logger.error(f"Workspace directory {workspace_dir} is empty.")
+        raise ParsingError("Repository extraction produced no files.")
 
     code_files_to_create = []
+    total_files_discovered = 0
+    supported_files = 0
+    skipped_files = 0
+
+    logger.info(
+        f"Starting parser scanner for repository: {repository_id}. "
+        f"Workspace target: {workspace_dir}."
+    )
 
     try:
         # Walk recursively through the workspace
@@ -62,6 +82,7 @@ async def parse_repository_files(db: AsyncSession, repository_id: str, workspace
             dirs[:] = [d for d in dirs if d not in IGNORED_DIRS]
 
             for file in files:
+                total_files_discovered += 1
                 file_path = Path(root) / file
                 ext = file_path.suffix.lower()
 
@@ -93,11 +114,22 @@ async def parse_repository_files(db: AsyncSession, repository_id: str, workspace
                             total_lines=total_lines
                         )
                         code_files_to_create.append(code_file)
+                        supported_files += 1
                         logger.info(f"Parsed file successfully: {relative_path} ({lang})")
 
                     except Exception as fe:
-                        logger.warning(f"Failed to parse individual file {file_path}: {str(fe)}")
+                        logger.exception(f"Failed to parse individual file {file_path}")
+                        skipped_files += 1
                         # Continue to parse other files even if one fails
+                else:
+                    skipped_files += 1
+
+        logger.info(
+            f"Scanner completed for repository: {repository_id}. "
+            f"Total files discovered: {total_files_discovered}. "
+            f"Supported files parsed: {supported_files}. "
+            f"Skipped/unsupported files: {skipped_files}."
+        )
 
         if not code_files_to_create:
             logger.error(f"No supported source code files found in workspace: {workspace_dir}")

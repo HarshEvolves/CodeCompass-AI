@@ -32,6 +32,15 @@ class Settings(BaseSettings):
             return [item.strip() for item in v.split(",") if item.strip()]
         return v
 
+    @field_validator("DATABASE_URL", mode="before")
+    @classmethod
+    def convert_database_url(cls, v: Any) -> str:
+        if isinstance(v, str):
+            # Convert standard postgresql:// prefix to asyncpg dialect scheme
+            if v.startswith("postgresql://"):
+                return v.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return v
+
     # ── JWT Authentication ──
     JWT_SECRET_KEY: str
     JWT_ALGORITHM: str = "HS256"

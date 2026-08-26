@@ -1,7 +1,7 @@
 """
 CodeCompass Chat Schema Validations
 """
-from typing import List
+from typing import Dict, List, Optional
 from pydantic import BaseModel, Field
 
 
@@ -11,6 +11,10 @@ class ChatRequest(BaseModel):
     """
     query: str = Field(..., description="The query or question about the repository.")
     top_k: int = Field(5, ge=1, le=50, description="The maximum number of retrieved chunks to base the response on.")
+    conversation_history: Optional[List[Dict[str, str]]] = Field(
+        None,
+        description="Prior messages in this conversation, each shaped {\"role\": \"user\"|\"assistant\", \"content\": \"...\"}. Not persisted server-side — passed in per-request by the frontend."
+    )
 
 
 class Citation(BaseModel):

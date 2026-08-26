@@ -40,6 +40,7 @@ interface Repository {
 interface ChatPayload {
   query: string;
   top_k?: number;
+  conversation_history?: { role: "user" | "assistant"; content: string }[];
 }
 
 interface ChatApiResponse {
@@ -138,13 +139,27 @@ export default function Chat() {
     },
   });
 
+  // Builds the last 2 exchanges (4 messages) from current chat state to send
+  // as conversation_history, so the backend can resolve references like "it"
+  // or "that" — skips error bubbles, which aren't real completed exchanges.
+  const buildConversationHistory = (): { role: "user" | "assistant"; content: string }[] => {
+    return messages
+      .filter((msg) => !msg.text.startsWith("⚠️ Error:"))
+      .slice(-4)
+      .map((msg) => ({
+        role: msg.sender === "user" ? ("user" as const) : ("assistant" as const),
+        content: msg.text,
+      }));
+  };
+
   const handleSendMessage = (textToSend: string) => {
     const trimmed = textToSend.trim();
     if (!trimmed || chatMutation.isPending) return;
 
+    const conversation_history = buildConversationHistory();
     setMessages((prev) => [...prev, { sender: "user", text: trimmed }]);
     setInputText("");
-    chatMutation.mutate({ query: trimmed, top_k: 5 });
+    chatMutation.mutate({ query: trimmed, top_k: 5, conversation_history });
   };
 
   const handleResetChat = () => {

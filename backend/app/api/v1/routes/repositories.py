@@ -520,7 +520,8 @@ async def chat_repository(
         results = await generate_rag_answer(
             repository_id=repo.id,
             query=chat_req.query,
-            top_k=chat_req.top_k
+            top_k=chat_req.top_k,
+            conversation_history=chat_req.conversation_history
         )
         return results
     except RAGError as e:

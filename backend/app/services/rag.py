@@ -4,7 +4,7 @@ CodeCompass RAG AI Service
 import logging
 import uuid
 import httpx
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from app.services.searcher import search_repository_chunks
 from app.services.embedder import get_chroma_collection
 from app.core.config import settings
@@ -19,9 +19,14 @@ class RAGError(Exception):
 
 MAX_CHUNK_CHARS = 2000
 MAX_CONTEXT_CHARS = 12000
+MAX_HISTORY_MESSAGES = 4
 
 
-def build_rag_prompt(query: str, chunks: List[Dict[str, Any]]) -> str:
+def build_rag_prompt(
+    query: str,
+    chunks: List[Dict[str, Any]],
+    conversation_history: Optional[List[Dict[str, str]]] = None
+) -> str:
     """
     Constructs the prompt containing only the retrieved code snippets
     and instructions to strictly restrict answers to the context.
@@ -30,6 +35,11 @@ def build_rag_prompt(query: str, chunks: List[Dict[str, Any]]) -> str:
     dominate the token budget, and the combined context stops growing
     past MAX_CONTEXT_CHARS, so requests stay under LLM provider token
     limits even on repos with many large chunks.
+
+    If conversation_history is provided, only the last MAX_HISTORY_MESSAGES
+    entries (2 exchanges) are included, keeping prompt size bounded — this
+    is not persisted server-side, it's passed in fresh by the frontend on
+    every request.
     """
     context_str = ""
     for chunk in chunks:
@@ -42,6 +52,15 @@ def build_rag_prompt(query: str, chunks: List[Dict[str, Any]]) -> str:
             break
         context_str += entry
 
+    history_section = ""
+    if conversation_history:
+        recent_history = conversation_history[-MAX_HISTORY_MESSAGES:]
+        history_lines = [
+            f"{'User' if msg.get('role') == 'user' else 'Assistant'}: {msg.get('content', '')}"
+            for msg in recent_history
+        ]
+        history_section = "Recent Conversation:\n" + "\n".join(history_lines) + "\n\n"
+
     prompt = f"""You are an expert AI code assistant helping a developer understand a repository. Answer the user's question using the provided repository context below.
 
 Guidelines:
@@ -49,8 +68,9 @@ Guidelines:
 2. Only say you don't have enough information if the context is genuinely unrelated to the question — not merely because the answer requires you to read and interpret the code rather than finding a literal match.
 3. Do not invent function names, behavior, or details that aren't shown in the context. If you're inferring something (e.g. likely intent from a partial snippet), say so.
 4. Keep your answer technical, concise, and grounded in the provided code.
+5. Use the recent conversation (if any) only to resolve references like "it" or "that" — the code context above is still the source of truth for facts.
 
-Retrieved Repository Context:
+{history_section}Retrieved Repository Context:
 {context_str}
 
 User Question: {query}
@@ -136,7 +156,8 @@ def _get_high_signal_chunks(repository_id: Any) -> List[Dict[str, Any]]:
 async def generate_rag_answer(
     repository_id: Any,
     query: str,
-    top_k: int = 5
+    top_k: int = 5,
+    conversation_history: Optional[List[Dict[str, str]]] = None
 ) -> Dict[str, Any]:
     """
     Executes the full RAG pipeline:
@@ -192,7 +213,7 @@ async def generate_rag_answer(
     ]
 
     # 3. Construct LLM prompt
-    prompt = build_rag_prompt(query, chunks)
+    prompt = build_rag_prompt(query, chunks, conversation_history)
 
     # 4. Invoke LLM API
     answer = ""

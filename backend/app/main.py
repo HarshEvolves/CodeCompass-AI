@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
-from app.api.v1.routes import health_router, auth_router, repositories_router
+from app.api.v1.routes import health_router, auth_router, repositories_router, ai_router
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +54,7 @@ app.add_middleware(
 app.include_router(health_router)
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(repositories_router, prefix="/api/v1")
+app.include_router(ai_router, prefix="/api/v1")
 
 
 @app.get("/", tags=["Root"])

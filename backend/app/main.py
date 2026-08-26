@@ -1,6 +1,7 @@
 """
 CodeCompass Backend — FastAPI App Core Entry Point
 """
+import asyncio
 import os
 import logging
 from contextlib import asynccontextmanager
@@ -9,6 +10,12 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.api.v1.routes import health_router, auth_router, repositories_router, ai_router
+from app.services.embedder import get_embedding_model
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s [%(name)s] %(message)s"
+)
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +29,11 @@ async def lifespan(app: FastAPI):
     os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
     os.makedirs(settings.WORKSPACE_DIR, exist_ok=True)
     os.makedirs(settings.CHROMA_PERSIST_DIR, exist_ok=True)
+
+    # Load the embedding model eagerly so the first /index request doesn't
+    # pay the cold-start cost (and block the event loop doing so).
+    await asyncio.to_thread(get_embedding_model)
+
     yield
 
 

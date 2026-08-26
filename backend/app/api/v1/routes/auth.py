@@ -9,7 +9,7 @@ from app.db import get_db
 from app.api.v1.deps import get_current_user
 from app.models.user import User
 from app.schemas.user import UserCreate, UserResponse, UserLogin, Token
-from app.services.auth_service import register_user, authenticate_user
+from app.services.auth_service import register_user, authenticate_user, get_or_create_guest_user
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -43,6 +43,27 @@ async def login(
     Verifies user credentials and returns a JWT access token.
     """
     user = await authenticate_user(db=db, credentials=credentials)
+    access_token = create_access_token(subject=user.id)
+    return {
+        "access_token": access_token,
+        "token_type": "bearer"
+    }
+
+
+@router.post(
+    "/guest",
+    response_model=Token,
+    status_code=status.HTTP_200_OK
+)
+async def guest_login(
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Logs into the single shared demo account (no registration required) and
+    returns a JWT access token for it. Guest data is shared/public across
+    everyone who uses this, so it must never be used for anything sensitive.
+    """
+    user = await get_or_create_guest_user(db=db)
     access_token = create_access_token(subject=user.id)
     return {
         "access_token": access_token,

@@ -110,3 +110,12 @@ To stop and wipe database/workspace volumes:
 ```bash
 docker compose down -v
 ```
+
+---
+
+## Known Limitations
+
+- **Broad queries**: Very generic questions (e.g. "what does this do") are recall-optimized using heuristics (README/entry-point files are always included), but highly specific follow-up questions will generally get more precise, better-grounded answers than open-ended ones.
+- **No conversation memory**: Each chat message is treated independently — the assistant doesn't retain context from earlier messages in the same conversation, so pronouns like "it" or "that" won't resolve to a previous topic.
+- **Free-tier LLM providers**: Chat automatically falls back across Groq → Gemini → OpenAI depending on which API keys are configured and current rate-limit status.
+- **Chunk relevance filtering**: Low-similarity matches are filtered out of retrieval results, so if a repository has sparse or unclear indexing for a topic, the assistant may say it can't find relevant information rather than guessing from a weak match.

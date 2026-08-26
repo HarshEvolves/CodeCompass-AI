@@ -1,6 +1,7 @@
 """
 CodeCompass Repository Upload and Retrieval Route Handlers
 """
+import logging
 import os
 import uuid
 from typing import List
@@ -18,6 +19,7 @@ from app.schemas.search import SearchRequest, SearchResultResponse
 from app.schemas.chat import ChatRequest, ChatResponse
 
 router = APIRouter(prefix="/repositories", tags=["Repositories"])
+logger = logging.getLogger(__name__)
 
 # Configuration settings
 UPLOAD_DIR = settings.UPLOAD_DIR
@@ -562,7 +564,7 @@ async def get_repository_file(
         )
 
     # 2. Resolve safe path
-    workspace_dir = os.path.abspath(os.path.join("workspace", str(repo.id)))
+    workspace_dir = os.path.abspath(os.path.join(settings.WORKSPACE_DIR, str(repo.id)))
     target_path = os.path.abspath(os.path.join(workspace_dir, file_path))
 
     # Path traversal validation (Zip Slip style protection)

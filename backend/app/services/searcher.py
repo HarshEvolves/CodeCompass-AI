@@ -13,6 +13,9 @@ class SearchError(Exception):
     pass
 
 
+MIN_SIMILARITY_THRESHOLD = 0.35
+
+
 async def search_repository_chunks(
     repository_id: uuid.UUID,
     query: str,
@@ -83,6 +86,13 @@ async def search_repository_chunks(
             "similarity_score": similarity_score,
             "code_content": documents[i]
         })
+
+    # 4. Drop weak matches that would dilute the RAG context, but never
+    # return nothing outright — a weak-but-only match beats no match.
+    filtered_results = [r for r in search_results if r["similarity_score"] >= MIN_SIMILARITY_THRESHOLD]
+    if not filtered_results and search_results:
+        filtered_results = [max(search_results, key=lambda r: r["similarity_score"])]
+    search_results = filtered_results
 
     logger.info(f"Successfully retrieved {len(search_results)} matching chunks for query '{query}'")
     return search_results

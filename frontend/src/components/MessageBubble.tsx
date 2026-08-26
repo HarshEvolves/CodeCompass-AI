@@ -1,3 +1,7 @@
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import CitationCard from "./CitationCard";
 import CodeSnippetPanel from "./CodeSnippetPanel";
 
@@ -37,7 +41,9 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
 
         {/* Text body */}
         <div className="space-y-1.5 select-text">
-          {renderMarkdown(message.text)}
+          <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+            {message.text}
+          </ReactMarkdown>
         </div>
 
         {/* Citations section */}
@@ -75,101 +81,60 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
   );
 }
 
-function renderInlineInside(text: string): React.ReactNode {
-  const parts = text.split(/(`.*?`)/g);
-  return (
-    <>
-      {parts.map((part, index) => {
-        if (part.startsWith("`") && part.endsWith("`")) {
-          return (
-            <code
-              key={index}
-              className="bg-bg-primary border border-border-default/45 px-1.5 py-0.5 rounded text-accent font-mono text-xs"
-            >
-              {part.slice(1, -1)}
-            </code>
-          );
-        }
-        return part;
-      })}
-    </>
-  );
-}
-
-function renderInline(text: string): React.ReactNode {
-  const parts = text.split(/(\*\*.*?\*\*|`.*?`)/g);
-  return (
-    <>
-      {parts.map((part, index) => {
-        if (part.startsWith("**") && part.endsWith("**")) {
-          return (
-            <strong key={index} className="font-bold text-text-primary">
-              {renderInlineInside(part.slice(2, -2))}
-            </strong>
-          );
-        }
-        if (part.startsWith("`") && part.endsWith("`")) {
-          return (
-            <code
-              key={index}
-              className="bg-bg-primary border border-border-default/45 px-1.5 py-0.5 rounded text-accent font-mono text-xs"
-            >
-              {part.slice(1, -1)}
-            </code>
-          );
-        }
-        return part;
-      })}
-    </>
-  );
-}
-
-function renderMarkdown(text: string) {
-  const lines = text.split("\n");
-  return lines.map((line, idx) => {
-    // 1. Headers
-    if (line.startsWith("### ")) {
+const markdownComponents = {
+  h1: ({ children }: any) => (
+    <h1 className="text-lg font-bold mt-5 mb-2.5 text-text-primary">{children}</h1>
+  ),
+  h2: ({ children }: any) => (
+    <h2 className="text-base font-bold mt-4 mb-2 text-text-primary">{children}</h2>
+  ),
+  h3: ({ children }: any) => (
+    <h3 className="text-sm font-bold mt-4 mb-2 text-text-primary">{children}</h3>
+  ),
+  p: ({ children }: any) => (
+    <p className="text-sm text-text-primary leading-relaxed">{children}</p>
+  ),
+  strong: ({ children }: any) => (
+    <strong className="font-bold text-text-primary">{children}</strong>
+  ),
+  ul: ({ children }: any) => (
+    <ul className="list-disc ml-4 text-sm text-text-primary leading-relaxed mt-1 space-y-1">
+      {children}
+    </ul>
+  ),
+  ol: ({ children }: any) => (
+    <ol className="list-decimal ml-4 text-sm text-text-primary leading-relaxed mt-1 space-y-1">
+      {children}
+    </ol>
+  ),
+  li: ({ children }: any) => <li>{children}</li>,
+  pre: ({ children }: any) => <>{children}</>,
+  code({ className, children, ...props }: any) {
+    const match = /language-(\w+)/.exec(className || "");
+    if (match) {
       return (
-        <h3 key={idx} className="text-sm font-bold mt-4 mb-2 text-text-primary">
-          {renderInline(line.slice(4))}
-        </h3>
+        <SyntaxHighlighter
+          language={match[1]}
+          style={vscDarkPlus}
+          customStyle={{
+            margin: "8px 0",
+            borderRadius: "8px",
+            fontSize: "12px",
+            lineHeight: "1.6",
+          }}
+        >
+          {String(children).replace(/\n$/, "")}
+        </SyntaxHighlighter>
       );
     }
-    if (line.startsWith("## ")) {
-      return (
-        <h2 key={idx} className="text-base font-bold mt-4 mb-2 text-text-primary">
-          {renderInline(line.slice(3))}
-        </h2>
-      );
-    }
-    if (line.startsWith("# ")) {
-      return (
-        <h1 key={idx} className="text-lg font-bold mt-5 mb-2.5 text-text-primary">
-          {renderInline(line.slice(2))}
-        </h1>
-      );
-    }
-
-    // 2. Lists
-    if (line.startsWith("* ") || line.startsWith("- ")) {
-      return (
-        <li key={idx} className="ml-4 list-disc text-sm text-text-primary leading-relaxed mt-1">
-          {renderInline(line.slice(2))}
-        </li>
-      );
-    }
-
-    // 3. Empty Line
-    if (line.trim() === "") {
-      return <div key={idx} className="h-2" />;
-    }
-
-    // 4. Normal text
     return (
-      <p key={idx} className="text-sm text-text-primary leading-relaxed">
-        {renderInline(line)}
-      </p>
+      <code
+        className="bg-bg-primary border border-border-default/45 px-1.5 py-0.5 rounded text-accent font-mono text-xs"
+        {...props}
+      >
+        {children}
+      </code>
     );
-  });
-}
+  },
+};
 

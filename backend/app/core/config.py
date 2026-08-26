@@ -61,8 +61,10 @@ class Settings(BaseSettings):
     # ── LLM Configuration (RAG) ──
     GEMINI_API_KEY: str | None = None
     OPENAI_API_KEY: str | None = None
-    GEMINI_MODEL: str = "gemini-3.5-flash"
+    GROQ_API_KEY: str = ""
+    GEMINI_MODEL: str = "gemini-3.6-flash"
     OPENAI_MODEL: str = "gpt-4o-mini"
+    GROQ_MODEL: str = "openai/gpt-oss-120b"
 
     model_config = SettingsConfigDict(
         env_file=".env",

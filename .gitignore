@@ -47,3 +47,4 @@ Thumbs.db
 frontend/dist/
 backend/uploads/
 backend/chroma_data/
+backend/workspace/

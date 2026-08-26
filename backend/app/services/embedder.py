@@ -4,6 +4,7 @@ CodeCompass Embedding Generation Service
 Generates vector embeddings for code chunks using Sentence Transformers
 and stores them in ChromaDB for persistent vector storage.
 """
+import asyncio
 import uuid
 import logging
 from sentence_transformers import SentenceTransformer
@@ -134,7 +135,10 @@ async def index_repository_chunks(
     # 5. Generate embeddings in a single batch call
     logger.info(f"Generating embeddings for {len(documents)} chunks...")
     try:
-        embeddings = model.encode(documents, show_progress_bar=False).tolist()
+        loop = asyncio.get_running_loop()
+        embeddings = (await loop.run_in_executor(
+            None, lambda: model.encode(documents, show_progress_bar=False)
+        )).tolist()
     except Exception as e:
         logger.error(f"Failed to generate embeddings: {str(e)}")
         raise EmbeddingError(f"Embedding generation failed: {str(e)}")

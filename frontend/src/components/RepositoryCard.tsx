@@ -49,8 +49,23 @@ export default function RepositoryCard({ repo, onActionSuccess }: RepositoryCard
     }
   };
 
-  const handleDeleteMock = () => {
-    alert("Repository deletion is not supported by the current backend API.");
+  const handleDelete = async () => {
+    if (!confirm(`Delete "${repo.name}"? This will remove its files and index permanently.`)) {
+      return;
+    }
+
+    setLoadingAction("delete");
+    setError(null);
+
+    try {
+      await api.delete(`/repositories/${repo.id}`);
+      onActionSuccess();
+    } catch (err: any) {
+      const errMsg = err.response?.data?.detail || "Failed to delete repository.";
+      setError(errMsg);
+    } finally {
+      setLoadingAction(null);
+    }
   };
 
   // Pipeline step matching logic
@@ -239,11 +254,16 @@ export default function RepositoryCard({ repo, onActionSuccess }: RepositoryCard
         {/* Primary Row - Open Chat / Delete */}
         <div className="grid grid-cols-12 gap-3 pt-2 border-t border-border-default/40">
           <button
-            onClick={handleDeleteMock}
-            className="col-span-3 h-11 border border-border-default/70 hover:border-error hover:text-error hover:bg-error/5 text-text-secondary rounded-xl flex items-center justify-center transition-all cursor-pointer"
+            onClick={handleDelete}
+            disabled={!!loadingAction}
+            className="col-span-3 h-11 border border-border-default/70 hover:border-error hover:text-error hover:bg-error/5 text-text-secondary rounded-xl flex items-center justify-center transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             title="Delete Repository Workspace"
           >
-            <Trash2 className="w-4 h-4" />
+            {loadingAction === "delete" ? (
+              <RefreshCw className="w-4 h-4 animate-spin" />
+            ) : (
+              <Trash2 className="w-4 h-4" />
+            )}
           </button>
 
           <button

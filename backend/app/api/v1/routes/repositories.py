@@ -3,6 +3,7 @@ CodeCompass Repository Upload and Retrieval Route Handlers
 """
 import logging
 import os
+import shutil
 import uuid
 from typing import List
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status
@@ -534,6 +535,73 @@ async def chat_repository(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"An unexpected error occurred during chat: {str(e)}"
         )
+
+
+@router.delete(
+    "/{repository_id}",
+    status_code=status.HTTP_200_OK
+)
+async def delete_repository(
+    repository_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Permanently deletes a repository: its ChromaDB embeddings, on-disk workspace
+    files, and database record. Only allows deletion of repositories owned by
+    the currently authenticated user. Each removal step is independently
+    fault-tolerant so a partial failure never blocks the overall deletion.
+    """
+    # 1. Fetch repository by ID and verify ownership
+    query = select(Repository).where(
+        Repository.id == repository_id,
+        Repository.user_id == current_user.id
+    )
+    result = await db.execute(query)
+    repo = result.scalars().first()
+
+    if not repo:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Repository not found."
+        )
+
+    # 2. Remove ChromaDB embeddings (best-effort)
+    from app.services.embedder import get_chroma_collection
+
+    try:
+        collection = get_chroma_collection()
+        existing = collection.get(where={"repository_id": str(repo.id)})
+        if existing and existing["ids"]:
+            collection.delete(ids=existing["ids"])
+            logger.info(f"Deleted {len(existing['ids'])} ChromaDB embeddings for repository {repo.id}")
+    except Exception as e:
+        logger.warning(f"Could not remove ChromaDB embeddings for repository {repo.id}: {str(e)}")
+
+    # 3. Remove on-disk workspace files (best-effort)
+    workspace_dir = os.path.join(settings.WORKSPACE_DIR, str(repo.id))
+    try:
+        shutil.rmtree(workspace_dir)
+        logger.info(f"Removed workspace directory: {workspace_dir}")
+    except FileNotFoundError:
+        pass
+    except Exception as e:
+        logger.warning(f"Could not remove workspace directory {workspace_dir}: {str(e)}")
+
+    # 4. Remove the original uploaded archive (best-effort)
+    try:
+        os.remove(repo.storage_path)
+        logger.info(f"Removed uploaded archive: {repo.storage_path}")
+    except FileNotFoundError:
+        pass
+    except Exception as e:
+        logger.warning(f"Could not remove uploaded archive {repo.storage_path}: {str(e)}")
+
+    # 5. Delete the database record
+    await db.delete(repo)
+    await db.commit()
+
+    return {"detail": "Repository deleted successfully."}
 
 
 @router.get(

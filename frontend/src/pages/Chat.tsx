@@ -72,6 +72,28 @@ export default function Chat() {
     scrollToBottom();
   }, [messages]);
 
+  // Load persisted messages for this repository on mount / repositoryId
+  // change. Falls back to an empty array silently if nothing is stored or
+  // the stored value is corrupted, and explicitly resets to empty when
+  // switching to a repository with no saved history, so histories don't
+  // bleed across repositories.
+  useEffect(() => {
+    if (!repositoryId) return;
+    try {
+      const stored = localStorage.getItem(`codecompass_chat_${repositoryId}`);
+      const parsed = stored ? JSON.parse(stored) : [];
+      setMessages(Array.isArray(parsed) ? parsed : []);
+    } catch {
+      setMessages([]);
+    }
+  }, [repositoryId]);
+
+  // Persist messages for this repository whenever they change.
+  useEffect(() => {
+    if (!repositoryId) return;
+    localStorage.setItem(`codecompass_chat_${repositoryId}`, JSON.stringify(messages));
+  }, [messages, repositoryId]);
+
   // Fetch repository details
   const fetchRepositoryDetails = async () => {
     try {
@@ -85,13 +107,19 @@ export default function Chat() {
         setRepo(found);
       } else {
         setRepo(found);
-        // Initial greeting
-        setMessages([
-          {
-            sender: "ai",
-            text: `Hello! I have fully indexed the codebase for **${found.name}**. Ask me any questions about the logic, structure, or implementation.`,
-          },
-        ]);
+        // Initial greeting — only when there's no restored history for this
+        // repository, so a persisted conversation isn't wiped out once this
+        // fetch resolves (it always resolves after the localStorage load).
+        setMessages((prev) =>
+          prev.length > 0
+            ? prev
+            : [
+                {
+                  sender: "ai",
+                  text: `Hello! I have fully indexed the codebase for **${found.name}**. Ask me any questions about the logic, structure, or implementation.`,
+                },
+              ]
+        );
       }
     } catch (err: any) {
       setErrorMsg("Failed to retrieve repository details.");

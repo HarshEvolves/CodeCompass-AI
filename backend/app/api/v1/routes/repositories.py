@@ -419,6 +419,171 @@ async def index_repository(
 
 
 @router.post(
+    "/{repository_id}/process",
+    response_model=RepositoryResponse,
+    status_code=status.HTTP_200_OK
+)
+async def process_repository(
+    repository_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Runs extract -> parse -> chunk -> index sequentially within a single request.
+    Avoids losing ephemeral workspace state to a container restart between separate
+    manual pipeline-step clicks on free-tier hosting. Repository status is updated
+    after each completed step (same states the individual endpoints use), so a
+    partial failure still leaves an accurate status for manual retry via the
+    individual extract/parse/chunk/index endpoints.
+    """
+    # 1. Fetch repository by ID and verify ownership
+    query = select(Repository).where(
+        Repository.id == repository_id,
+        Repository.user_id == current_user.id
+    )
+    result = await db.execute(query)
+    repo = result.scalars().first()
+
+    if not repo:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Repository not found."
+        )
+
+    # 2. Check repository state (initial status is stored lowercase "uploaded"
+    #    at creation time, unlike the uppercase states the pipeline sets afterward)
+    if repo.upload_status.upper() != "UPLOADED":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Repository cannot be processed unless it is in the UPLOADED state. Current state: {repo.upload_status}"
+        )
+
+    from app.core.config import settings
+    from app.services import (
+        extract_zip_securely, ExtractionError,
+        parse_repository_files, ParsingError,
+        chunk_repository_files, ChunkingError,
+        index_repository_chunks, EmbeddingError,
+    )
+
+    workspace_dir = os.path.join(settings.WORKSPACE_DIR, str(repo.id))
+
+    # Step 1: Extract
+    try:
+        extract_zip_securely(repo.storage_path, workspace_dir)
+        repo.upload_status = "EXTRACTED"
+        db.add(repo)
+        await db.commit()
+        await db.refresh(repo)
+    except ExtractionError as e:
+        repo.upload_status = "FAILED"
+        db.add(repo)
+        await db.commit()
+        await db.refresh(repo)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Processing failed at step 'extract': {str(e)}"
+        )
+    except Exception as e:
+        repo.upload_status = "FAILED"
+        db.add(repo)
+        await db.commit()
+        await db.refresh(repo)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Processing failed at step 'extract': {str(e)}"
+        )
+
+    # Step 2: Parse
+    try:
+        await parse_repository_files(db, repo.id, workspace_dir)
+        repo.upload_status = "PARSED"
+        db.add(repo)
+        await db.commit()
+        await db.refresh(repo)
+    except ParsingError as e:
+        await db.rollback()
+        try:
+            repo.upload_status = "FAILED"
+            db.add(repo)
+            await db.commit()
+            await db.refresh(repo)
+        except Exception:
+            logger.exception(f"Failed to mark repository {repo.id} as FAILED after parse error during processing.")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Processing failed at step 'parse': {str(e)}"
+        )
+    except Exception as e:
+        await db.rollback()
+        try:
+            repo.upload_status = "FAILED"
+            db.add(repo)
+            await db.commit()
+            await db.refresh(repo)
+        except Exception:
+            logger.exception(f"Failed to mark repository {repo.id} as FAILED after parse error during processing.")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Processing failed at step 'parse': {str(e)}"
+        )
+
+    # Step 3: Chunk
+    try:
+        await chunk_repository_files(db, repo.id, workspace_dir)
+        repo.upload_status = "CHUNKED"
+        db.add(repo)
+        await db.commit()
+        await db.refresh(repo)
+    except ChunkingError as e:
+        repo.upload_status = "FAILED"
+        db.add(repo)
+        await db.commit()
+        await db.refresh(repo)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Processing failed at step 'chunk': {str(e)}"
+        )
+    except Exception as e:
+        repo.upload_status = "FAILED"
+        db.add(repo)
+        await db.commit()
+        await db.refresh(repo)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Processing failed at step 'chunk': {str(e)}"
+        )
+
+    # Step 4: Index
+    try:
+        await index_repository_chunks(db, repo.id)
+        repo.upload_status = "INDEXED"
+        db.add(repo)
+        await db.commit()
+        await db.refresh(repo)
+    except EmbeddingError as e:
+        repo.upload_status = "FAILED"
+        db.add(repo)
+        await db.commit()
+        await db.refresh(repo)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Processing failed at step 'index': {str(e)}"
+        )
+    except Exception as e:
+        repo.upload_status = "FAILED"
+        db.add(repo)
+        await db.commit()
+        await db.refresh(repo)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Processing failed at step 'index': {str(e)}"
+        )
+
+    return repo
+
+
+@router.post(
     "/{repository_id}/search",
     response_model=List[SearchResultResponse],
     status_code=status.HTTP_200_OK

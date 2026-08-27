@@ -49,6 +49,21 @@ export default function RepositoryCard({ repo, onActionSuccess }: RepositoryCard
     }
   };
 
+  const handleProcess = async () => {
+    setLoadingAction("process");
+    setError(null);
+
+    try {
+      await api.post(`/repositories/${repo.id}/process`);
+      onActionSuccess();
+    } catch (err: any) {
+      const errMsg = err.response?.data?.detail || "Failed to process repository.";
+      setError(errMsg);
+    } finally {
+      setLoadingAction(null);
+    }
+  };
+
   const handleDelete = async () => {
     if (!confirm(`Delete "${repo.name}"? This will remove its files and index permanently.`)) {
       return;
@@ -177,6 +192,23 @@ export default function RepositoryCard({ repo, onActionSuccess }: RepositoryCard
 
       {/* Button controls grid - Minimum height 44px, clean gaps */}
       <div className="space-y-4 pt-6 mt-auto">
+        {isUploaded ? (
+          /* Fresh upload: single one-click button runs the full pipeline
+             server-side, avoiding a free-tier container restart wiping the
+             ephemeral workspace between separate step clicks. */
+          <button
+            onClick={handleProcess}
+            disabled={!!loadingAction}
+            className="w-full h-11 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2.5 transition-all select-none border bg-accent text-white border-accent-secondary hover:bg-accent-hover hover:shadow-lg hover:shadow-accent/15 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {loadingAction === "process" ? (
+              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <ArrowRight className="w-3.5 h-3.5" />
+            )}
+            <span>Process Repository</span>
+          </button>
+        ) : (
         <div className="grid grid-cols-2 gap-3">
           {/* Extract Button */}
           <button
@@ -250,6 +282,7 @@ export default function RepositoryCard({ repo, onActionSuccess }: RepositoryCard
             <span>Index</span>
           </button>
         </div>
+        )}
 
         {/* Primary Row - Open Chat / Delete */}
         <div className="grid grid-cols-12 gap-3 pt-2 border-t border-border-default/40">

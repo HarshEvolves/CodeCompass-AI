@@ -4,6 +4,8 @@ FROM python:3.12-slim
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     DEBIAN_FRONTEND=noninteractive
+ENV OMP_NUM_THREADS=1
+ENV TOKENIZERS_PARALLELISM=false
 
 # Set working directory
 WORKDIR /app
@@ -21,6 +23,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Pre-download the embedding model into the image so runtime startup only
+# reads cached weights from disk instead of downloading during eager-load
+RUN python3 -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
 
 # Copy backend codebase
 COPY . .
